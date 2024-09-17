@@ -1,5 +1,3 @@
 fastapi==0.100.1
 uvicorn[standard]==0.23.2
-numpy==1.24.3
 rampdemand==0.5.2
-pandas==2.0.0
