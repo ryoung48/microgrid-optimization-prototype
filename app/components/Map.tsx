@@ -76,9 +76,6 @@ const MyanmarMap: React.FC = () => {
                     <button
                       className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                       onClick={async () => {
-                        const resp = await fetch(`/api`);
-                        const parsed = await resp.json();
-                        console.log(parsed);
                         window.open(
                           `/dashboard/${point.village_cluster_id}`,
                           "_blank"
