@@ -1,9 +1,3 @@
-from joblib import Memory
-
-# setup job lib cache
-mem_cache = Memory('cache')
-
-
 from datetime import datetime, timedelta
 
 def comparable_date(date: str) -> str:
