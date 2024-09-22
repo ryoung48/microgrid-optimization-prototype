@@ -41,7 +41,7 @@ import numpy as np
 import random
 
 
-SIMULATION_YEARS = 15
+SIMULATION_YEARS = 5
 
 # Battery Constants
 RTE_BATT = 0.95  # round trip efficiency of the battery
