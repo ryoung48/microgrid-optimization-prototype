@@ -1,92 +1,192 @@
 "use client";
 
 import React from "react";
-import { ResponsiveLine } from "@nivo/line";
-import { ResponsivePie } from "@nivo/pie";
 import { villages } from "../../data/villages";
+import Loader from "@/app/components/Loader";
+import dynamic from "next/dynamic";
+const Plot = dynamic(() => import("react-plotly.js"), { ssr: false, })
 
-// Data types
-interface MicroGridConfig {
-  component: string;
-  size: number;
+function generateHourlyTimestampsUTC(startDate: string, n: number): string[] {
+  const timestamps: string[] = [];
+  const start = new Date(`${startDate}T00:00:00Z`); // Force UTC start date
+
+  for (let day = 0; day < n; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      // Create a new date for each hour
+      const timestamp = new Date(start);
+      timestamp.setUTCDate(start.getUTCDate() + day); // Move to the correct day in UTC
+      timestamp.setUTCHours(hour, 0, 0, 0); // Set the hour, minutes, seconds, milliseconds in UTC
+
+      // Format the date to 'YYYY-MM-DD HH:mm' in UTC
+      const year = timestamp.getUTCFullYear();
+      const month = String(timestamp.getUTCMonth() + 1).padStart(2, "0"); // Month is zero-indexed
+      const dayOfMonth = String(timestamp.getUTCDate()).padStart(2, "0");
+      const hours = String(timestamp.getUTCHours()).padStart(2, "0");
+      const formattedTimestamp = `${year}-${month}-${dayOfMonth} ${hours}:00`;
+
+      timestamps.push(formattedTimestamp);
+    }
+  }
+
+  return timestamps;
 }
-
-interface EnergyDispatch {
-  time: string;
-  solar: number;
-  wind: number;
-  battery: number;
-}
-
-interface MicroGridInfo {
-  name: string;
-  region: string;
-  township: string;
-  population: number;
-  microGridConfig: MicroGridConfig[];
-  energyDispatch: EnergyDispatch[];
-}
-
-// Sample Data (You can replace this with actual data)
-const microGridData: MicroGridInfo = {
-  name: "Sample MicroGrid",
-  region: "Northern Region",
-  township: "Sunshine Town",
-  population: 2000,
-  microGridConfig: [
-    { component: "Solar Panels", size: 40 },
-    { component: "Wind Turbines", size: 30 },
-    { component: "Battery Storage", size: 30 },
-  ],
-  energyDispatch: [
-    { time: "08:00", solar: 20, wind: 10, battery: 5 },
-    { time: "09:00", solar: 50, wind: 20, battery: 10 },
-    { time: "10:00", solar: 35, wind: 30, battery: 15 },
-    { time: "11:00", solar: 60, wind: 40, battery: 20 },
-    { time: "12:00", solar: 80, wind: 60, battery: 25 },
-  ],
-};
 
 export default function Page({ params }: { params: { id: string } }) {
   const id = parseInt(params.id);
+  const startDate = "2024-09-19";
+  const numDays = 7;
   const village = villages.find((village) => village.village_cluster_id === id);
+  const [loading, setLoading] = React.useState(true);
+  const [data, setData] = React.useState({
+    capacity: {
+      PV: 1,
+      battery: 1,
+      diesel: 1,
+    },
+    E_PV: [0],
+    E_batt: [0],
+    E_diesel: [0],
+    C_batt: [0],
+    E_load: [0],
+  });
   if (!village) return <div>No data found</div>;
-  // Line chart data for energy dispatch (multiple lines)
-  const energyDispatchData = [
-    {
-      id: "Solar Energy",
-      data: microGridData.energyDispatch.map((dispatch) => ({
-        x: dispatch.time,
-        y: dispatch.solar,
-      })),
-    },
-    {
-      id: "Wind Energy",
-      data: microGridData.energyDispatch.map((dispatch) => ({
-        x: dispatch.time,
-        y: dispatch.wind,
-      })),
-    },
-    {
-      id: "Battery Storage",
-      data: microGridData.energyDispatch.map((dispatch) => ({
-        x: dispatch.time,
-        y: dispatch.battery,
-      })),
-    },
-  ];
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  React.useEffect(() => {
+    const lat = village["Y_deg"];
+    const lon = village["X_deg"];
+    const pop = village["Pop"];
+    const households = Math.ceil(pop / 5.1);
+    const init = async () => {
+      const res = await fetch(
+        `/api/optimization?lat=${lat}&lon=${lon}&households=${households}&num_days=${numDays}&start_date=${startDate}`
+      );
+      const parsed = await res.json();
+      console.log(parsed);
+      setData(parsed);
+      setLoading(false);
+      localStorage.setItem(cacheKey, JSON.stringify({ parsed }));
+    };
+    const cacheKey = `optimization-${lat}-${lon}-${pop}-${households}-${numDays}-${startDate}`;
+    const cachedData = localStorage.getItem(cacheKey);
 
-  // Donut chart data for micro grid configuration
-  const microGridConfigData = microGridData.microGridConfig.map((config) => ({
-    id: config.component,
-    label: config.component,
-    value: config.size,
-  }));
+    if (cachedData) {
+      const { parsed } = JSON.parse(cachedData);
+      setData(parsed);
+      setLoading(false);
+    } else {
+      init();
+    }
+  }, [village]);
+  const timestamps = generateHourlyTimestampsUTC(startDate, numDays);
+
+  const colors = {
+    diesel: "rgba(54, 162, 235, 1)",
+    pv: "rgba(75, 192, 192, 1)",
+    battery: "#c0954b",
+  };
+
+  const microGridConfig = {
+    data: [
+      {
+        type: "pie",
+        values: [data.capacity.PV, data.capacity.battery, data.capacity.diesel],
+        labels: ["Solar Panels", "Battery Storage", "Diesel Generator"],
+        hole: 0.4, // Creates the 'donut' hole in the middle
+        textinfo: "label+percent",
+        insidetextorientation: "radial",
+        marker: {
+          colors: [colors.pv, colors.battery, colors.diesel],
+        },
+      },
+    ],
+    layout: {
+      annotations: [
+        {
+          text: "",
+          font: {
+            size: 20,
+          },
+          showarrow: false,
+          x: 0.5,
+          y: 0.5,
+        },
+      ],
+      showlegend: false,
+      legend: {
+        x: 1,
+        y: 0.5,
+      },
+      margin: { l: 0, r: 0, b: 30, t: 40 }, // Adjusts margins to make the chart bigger inside the container
+      height: 300, // Adjust the height inside the plotly container
+      width: 550, // Adjust the width inside the plotly container
+    },
+  };
+
+  const energyDispatch = {
+    data: [
+      {
+        name: "Demand Load",
+        y: data.E_load,
+        x: timestamps,
+        type: "scatter", // Line chart type in Plotly is 'scatter'
+        mode: "lines+markers",
+        line: { color: "rgba(255, 99, 132, 1)" }, // Line color
+        marker: { color: "rgba(255, 99, 132, 0.8)" }, // Marker color
+      },
+      {
+        name: "Diesel Energy",
+        y: data.E_diesel,
+        x: timestamps,
+        type: "scatter", // Line chart type in Plotly is 'scatter'
+        mode: "lines+markers",
+        line: { color: colors.diesel },
+        marker: { color: colors.diesel },
+      },
+      {
+        name: "Solar Energy",
+        y: data.E_PV,
+        x: timestamps,
+        type: "scatter", // Line chart type in Plotly is 'scatter'
+        mode: "lines+markers",
+        line: { color: colors.pv },
+        marker: { color: colors.pv },
+      },
+      {
+        name: "Battery Charge",
+        y: data.C_batt,
+        x: timestamps,
+        type: "scatter", // Line chart type in Plotly is 'scatter'
+        mode: "lines+markers",
+        line: { color: colors.battery },
+        marker: { color: colors.battery },
+      },
+      {
+        name: "Battery Discharge",
+        y: data.E_batt,
+        x: timestamps,
+        type: "scatter", // Line chart type in Plotly is 'scatter'
+        mode: "lines+markers",
+        line: { color: "#4bc07a" },
+        marker: { color: "#4bc07a" },
+      },
+    ],
+    layout: {
+      yaxis: {
+        title: "kWh",
+      },
+      legend: {
+        orientation: "h" as const, // 'h' for horizontal legend, 'v' for vertical
+        x: 0.25,
+        y: 1.5,
+      },
+    },
+  };
 
   return (
     <div className="p-10">
+      <Loader enabled={loading}></Loader>
       {/* Row: Micro Grid Info Section and Donut Chart */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
         {/* Micro Grid Info Section */}
         <div>
           <h1 className="text-4xl font-bold mb-4">{village.name}</h1>
@@ -105,26 +205,45 @@ export default function Page({ params }: { params: { id: string } }) {
         </div>
 
         {/* Donut Chart: MicroGrid Configuration */}
-        <div className="h-96 bg-white shadow-lg rounded-lg p-6 border border-gray-200">
-          <h2 className="text-2xl font-semibold mb-4">
-            Micro Grid Configuration
+        <div className="h-96 bg-white shadow-lg rounded-lg p-6 pb-12 border border-gray-200">
+          <div className="h-full">
+            <h1 className="text-2xl font-bold mb-4">Optimization Objectives</h1>
+            <p>
+              Loss Load:{" "}
+              {data.E_load.reduce((sum, curr, i) => {
+                const loss =
+                  curr - data.E_diesel[i] - data.E_PV[i] - data.E_batt[i];
+                return sum + (loss < 0 ? 0 : loss);
+              }, 0).toFixed(2)}
+            </p>
+            <p>
+              Curtailment:{" "}
+              {data.E_load.reduce((sum, curr, i) => {
+                const curtailment =
+                  curr - data.E_diesel[i] - data.E_PV[i] - data.E_batt[i];
+                return sum + (curtailment >= 0 ? 0 : -curtailment);
+              }, 0).toFixed(2)}
+            </p>
+            <p>
+              Diesel Usage:{" "}
+              {data.E_diesel.reduce((sum, curr) => {
+                return sum + curr;
+              }, 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+
+        {/* Donut Chart: MicroGrid Configuration */}
+        <div className="h-96 bg-white shadow-lg rounded-lg p-6 pb-12 border border-gray-200">
+          <h2 className="text-2xl font-semibold mb-2">
+            Microgrid Configuration
           </h2>
           <div className="h-full">
-            <ResponsivePie
-              data={microGridConfigData}
-              margin={{ top: 40, right: 80, bottom: 80, left: 80 }}
-              innerRadius={0.5}
-              padAngle={0.7}
-              cornerRadius={3}
-              activeOuterRadiusOffset={8}
-              borderWidth={1}
-              borderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
-              arcLinkLabelsSkipAngle={10}
-              arcLinkLabelsTextColor="#333333"
-              arcLinkLabelsThickness={2}
-              arcLinkLabelsColor={{ from: "color" }}
-              arcLabelsSkipAngle={10}
-              arcLabelsTextColor={{ from: "color", modifiers: [["darker", 2]] }}
+            <Plot
+              // @ts-ignore
+              data={microGridConfig.data}
+              layout={microGridConfig.layout}
+              // style={{ width: "100%", height: "100%" }}
             />
           </div>
         </div>
@@ -136,65 +255,11 @@ export default function Page({ params }: { params: { id: string } }) {
           Energy Dispatch Over Time
         </h2>
         <div className="h-full">
-          <ResponsiveLine
-            data={energyDispatchData}
-            margin={{ top: 50, right: 150, bottom: 50, left: 60 }}
-            xScale={{ type: "point" }}
-            yScale={{
-              type: "linear",
-              min: "auto",
-              max: "auto",
-              stacked: false,
-              reverse: false,
-            }}
-            axisBottom={{
-              tickSize: 5,
-              tickPadding: 5,
-              tickRotation: 0,
-              legend: "Time",
-              legendOffset: 36,
-              legendPosition: "middle",
-            }}
-            axisLeft={{
-              tickSize: 5,
-              tickPadding: 5,
-              tickRotation: 0,
-              legend: "Energy (kWh)",
-              legendOffset: -40,
-              legendPosition: "middle",
-            }}
-            pointSize={10}
-            pointColor={{ theme: "background" }}
-            pointBorderWidth={2}
-            pointBorderColor={{ from: "serieColor" }}
-            pointLabelYOffset={-12}
-            useMesh={true}
-            legends={[
-              {
-                anchor: "top-right",
-                direction: "column",
-                justify: false,
-                translateX: 100,
-                translateY: 0,
-                itemsSpacing: 0,
-                itemDirection: "left-to-right",
-                itemWidth: 80,
-                itemHeight: 20,
-                itemOpacity: 0.75,
-                symbolSize: 12,
-                symbolShape: "circle",
-                symbolBorderColor: "rgba(0, 0, 0, .5)",
-                effects: [
-                  {
-                    on: "hover",
-                    style: {
-                      itemBackground: "rgba(0, 0, 0, .03)",
-                      itemOpacity: 1,
-                    },
-                  },
-                ],
-              },
-            ]}
+          <Plot
+            // @ts-ignore
+            data={energyDispatch.data}
+            layout={energyDispatch.layout}
+            style={{ width: "100%", height: "100%" }}
           />
         </div>
       </div>

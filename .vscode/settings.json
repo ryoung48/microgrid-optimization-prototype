@@ -1,5 +1,6 @@
 {
-    "cSpell.words": [
-        "nivo"
-    ]
+  "cSpell.words": ["nivo"],
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "${workspaceFolder}"
+  }
 }
