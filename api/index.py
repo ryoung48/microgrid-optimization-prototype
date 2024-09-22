@@ -2,9 +2,9 @@ import datetime
 from fastapi import FastAPI
 import numpy as np
 import random
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 random.seed(0)
-load_dotenv()
+# load_dotenv()
 
 from api.capacity import optimize_capacity
 from api.demand.index import build_settlement_demand
