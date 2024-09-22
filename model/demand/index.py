@@ -45,11 +45,11 @@ Appliance notes:
 
 from datetime import datetime, timedelta
 import numpy as np
-from api.demand.ramp_slim import User, UseCase
+from model.demand.ramp_slim import User, UseCase
 import random
-from api.services.utilities import comparable_date
-from api.demand.definitions import appliance_usage
-from api.services.renewable_ninja import get_heating_demand
+from model.services.utilities import comparable_date
+from model.demand.definitions import appliance_usage
+from model.services.renewable_ninja import get_heating_demand
 
 appliance_aliases = {
     "air conditioner": ["air conditioner (weekday)", "air conditioner (weekend)"],

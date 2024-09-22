@@ -6,15 +6,15 @@ import random
 random.seed(0)
 # load_dotenv()
 
-from api.capacity import optimize_capacity
-from api.demand.index import build_settlement_demand
-from api.services.renewable_ninja import get_pv_output
-from api.services.utilities import comparable_date
+from model.capacity import optimize_capacity
+from model.demand.index import build_settlement_demand
+from model.services.renewable_ninja import get_pv_output
+from model.services.utilities import comparable_date
 
-app = FastAPI()
+# app = FastAPI()
 
 
-@app.get("/api/optimization")
+# @app.get("/api/optimization")
 def run(
     lat: float,
     lon: float,
@@ -62,4 +62,4 @@ def run(
     # in future, we can cap it at two weeks (the most expensive weeks) to shorten the train time
     return optimize_capacity(demand, unit_pv)
 
-# run(20, 94, 3, 3, "2024-09-01")
+run(20, 94, 3, 3, "2024-09-01")
