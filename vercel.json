@@ -1,7 +1,7 @@
 {
 	"functions": {
 		"api/index.py": {
-			"excludeFiles": ["!api/**", "*", "**/*"]
+			"includeFiles": "api/**"
 		}
 	}
 }
