@@ -13,8 +13,47 @@ Notes:
 
 """
 from datetime import timedelta, datetime
+import json
 import os
-import requests
+
+import http.client
+import urllib.parse
+
+def make_get_request(base_url, query_params=None, headers=None):
+    # Parse the base URL
+    parsed_url = urllib.parse.urlparse(base_url)
+
+    # Construct the query string if any query parameters are provided
+    if query_params:
+        query_string = urllib.parse.urlencode(query_params)
+        path = f"{parsed_url.path}?{query_string}"
+    else:
+        path = parsed_url.path
+
+    # Create a connection (assuming HTTP; use HTTPSConnection for secure URLs)
+    conn = http.client.HTTPSConnection(parsed_url.hostname)
+
+    # Set headers if provided, otherwise set to empty dict
+    headers = headers if headers else {}
+
+    # Send the GET request
+    conn.request("GET", path, headers=headers)
+
+    # Get the response
+    response = conn.getresponse()
+
+    # Read and decode the response data
+    data = response.read().decode()
+
+    # Close the connection
+    conn.close()
+
+    return {
+        "status": response.status,
+        "reason": response.reason,
+        "headers": response.getheaders(),
+        "data": data
+    }
 
 # >> IMPORTANT: get your own token from https://www.renewables.ninja/documentation/api <<
 # and add as an environment variable << ask chat gpt if you don't know how
@@ -64,16 +103,16 @@ def get_heating_demand(start_date, end_date, lat, lon):
     headers = {"Authorization": f"Token {API_TOKEN}"}
 
     # Make the GET request to the API
-    response = requests.get(base_url, params=params, headers=headers)
+    response = make_get_request(base_url, params, headers)
 
     # Check if the request was successful
-    if response.status_code == 200:
+    if response['status'] == 200:
         # Return the JSON data
-        data = response.json()["data"]
+        data = json.loads(response['data'])['data']
         return data
     else:
         # Handle errors
-        response.raise_for_status()
+        raise Exception(f"Request failed with status code {response['status']}: {response['reason']}")
 
 def get_pv_output(start_date, end_date, lat, lon):
     """Pulls hourly PV output for a given location + time period.
@@ -113,14 +152,14 @@ def get_pv_output(start_date, end_date, lat, lon):
     headers = {"Authorization": f"Token {API_TOKEN}"}
 
     # Make the GET request to the API
-    response = requests.get(base_url, params=params, headers=headers)
+    response = make_get_request(base_url, params, headers)
 
     # Check if the request was successful
-    if response.status_code == 200:
-        data = response.json()["data"]
+    if response['status'] == 200:
+        data = json.loads(response['data'])['data']
         filtered = [(d['local_time'][:10], d['local_time'], d['electricity']) for d in data.values() if start_date <= d['local_time'][:10] <= end_date]
         # Return the JSON data
         return [d[2] for d in filtered]
     else:
         # Handle errors
-        response.raise_for_status()
+        raise Exception(f"Request failed with status code {response['status']}: {response['reason']}")
