@@ -35,14 +35,6 @@ You can clone & deploy it to Vercel with one click:
 
 ## Developing Locally
 
-You can clone & create this repo with the following command
-
-```bash
-npx create-next-app nextjs-fastapi --example "https://github.com/digitros/nextjs-fastapi"
-```
-
-## Getting Started
-
 First, install the dependencies:
 
 ```bash
@@ -52,6 +44,8 @@ yarn
 # or
 pnpm install
 ```
+
+***Note:** You will need to set an environment variable: `RENEWABLES_NINJA_API_TOKEN`. Create an account on [www.renewables.ninja](https://www.renewables.ninja/) to get your key.
 
 Then, run the development server:
 
