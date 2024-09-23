@@ -1,18 +1,18 @@
-"use client";
+'use client'
 
-import React from "react";
-import dynamic from "next/dynamic";
+import React from 'react'
+import dynamic from 'next/dynamic'
 
-const MapWithNoSSR = dynamic(() => import("./components/Map"), {
-  ssr: false,
-});
+const MapWithNoSSR = dynamic(() => import('./components/Map'), {
+  ssr: false
+})
 
 const App: React.FC = () => {
   return (
     <div>
       <MapWithNoSSR />
     </div>
-  );
-};
+  )
+}
 
-export default App;
+export default App
