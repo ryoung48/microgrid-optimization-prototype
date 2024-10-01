@@ -60,22 +60,17 @@ export default function Page({ params }: { params: { id: string } }) {
     const households = Math.ceil(pop / 5.1)
     const init = async () => {
       const res = await fetch(
-        `/api/data?lat=${lat}&lon=${lon}&households=${households}&num_days=${numDays}&start_date=${startDate}`,
-        {
-          next: {
-            revalidate: 3600 // 1 hour
-          }
-        }
+        `/api/data?lat=${lat}&lon=${lon}&households=${households}&num_days=${numDays}&start_date=${startDate}`
       )
       const parsed = (await res.json()) as OptimizationParams
       console.log(parsed)
       const result = optimize_capacity(parsed)
       setData(result)
       setLoading(false)
-      // localStorage.setItem(cacheKey, JSON.stringify({ parsed }))
+      sessionStorage.setItem(cacheKey, JSON.stringify({ parsed }))
     }
     const cacheKey = `data-${lat}-${lon}-${pop}-${households}-${numDays}-${startDate}`
-    const cachedData = localStorage.getItem(cacheKey)
+    const cachedData = sessionStorage.getItem(cacheKey)
 
     if (cachedData) {
       const { parsed } = JSON.parse(cachedData)
