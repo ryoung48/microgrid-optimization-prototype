@@ -4,6 +4,8 @@ import React from 'react'
 import { villages } from '../../data/villages'
 import Loader from '@/app/components/Loader'
 import dynamic from 'next/dynamic'
+import { OptimizationParams, OptimizationResult } from '@/app/optimization/types'
+import { optimize_capacity } from '@/app/optimization'
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false })
 
 function generateHourlyTimestampsUTC(startDate: string, n: number): string[] {
@@ -37,7 +39,7 @@ export default function Page({ params }: { params: { id: string } }) {
   const numDays = 7
   const village = villages.find(village => village.village_cluster_id === id)
   const [loading, setLoading] = React.useState(true)
-  const [data, setData] = React.useState({
+  const [data, setData] = React.useState<OptimizationResult>({
     capacity: {
       PV: 1,
       battery: 1,
@@ -58,15 +60,21 @@ export default function Page({ params }: { params: { id: string } }) {
     const households = Math.ceil(pop / 5.1)
     const init = async () => {
       const res = await fetch(
-        `/api/optimization?lat=${lat}&lon=${lon}&households=${households}&num_days=${numDays}&start_date=${startDate}`
+        `/api/data?lat=${lat}&lon=${lon}&households=${households}&num_days=${numDays}&start_date=${startDate}`,
+        {
+          next: {
+            revalidate: 3600 // 1 hour
+          }
+        }
       )
-      const parsed = await res.json()
+      const parsed = (await res.json()) as OptimizationParams
       console.log(parsed)
-      setData(parsed)
+      const result = optimize_capacity(parsed)
+      setData(result)
       setLoading(false)
-      localStorage.setItem(cacheKey, JSON.stringify({ parsed }))
+      // localStorage.setItem(cacheKey, JSON.stringify({ parsed }))
     }
-    const cacheKey = `optimization-${lat}-${lon}-${pop}-${households}-${numDays}-${startDate}`
+    const cacheKey = `data-${lat}-${lon}-${pop}-${households}-${numDays}-${startDate}`
     const cachedData = localStorage.getItem(cacheKey)
 
     if (cachedData) {
