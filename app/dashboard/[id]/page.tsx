@@ -67,14 +67,14 @@ export default function Page({ params }: { params: { id: string } }) {
       const result = optimize_capacity(parsed)
       setData(result)
       setLoading(false)
-      sessionStorage.setItem(cacheKey, JSON.stringify({ parsed }))
+      sessionStorage.setItem(cacheKey, JSON.stringify({ result }))
     }
     const cacheKey = `data-${lat}-${lon}-${pop}-${households}-${numDays}-${startDate}`
     const cachedData = sessionStorage.getItem(cacheKey)
 
     if (cachedData) {
-      const { parsed } = JSON.parse(cachedData)
-      setData(parsed)
+      const { result } = JSON.parse(cachedData)
+      setData(result)
       setLoading(false)
     } else {
       init()
