@@ -1,5 +1,11 @@
 {
-  "cSpell.words": ["nivo"],
+  "cSpell.words": [
+    "capex",
+    "Levelized",
+    "MICROGRID",
+    "nivo",
+    "opex"
+  ],
   "terminal.integrated.env.windows": {
     "PYTHONPATH": "${workspaceFolder}"
   }

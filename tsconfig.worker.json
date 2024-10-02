@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "ESNext",
+    "moduleResolution": "nodenext",
+    "outDir": "./public/workers",
+    "noEmit": false
+  },
+  "include": ["./app/optimization/**/*.ts"]
+}

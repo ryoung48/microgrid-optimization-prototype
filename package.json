@@ -6,7 +6,8 @@
     "fastapi-dev": "pip install -r requirements.txt && python -m uvicorn api.index:app --reload",
     "next-dev": "next dev",
     "dev": "concurrently \"npm run next-dev\" \"npm run fastapi-dev\"",
-    "build": "next build",
+    "build:workers": "tsc --project tsconfig.worker.json",
+    "build": "next build && npm run build:workers",
     "start": "next start",
     "lint": "next lint"
   },

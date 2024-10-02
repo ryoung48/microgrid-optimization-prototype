@@ -1,52 +1,63 @@
-import { OptimizationParams, OptimizationResult } from './types'
+export type OptimizationParams = {
+  E_load: number[]
+  E_PV: number[]
+  options: {
+    years: number
+    battery: {
+      initial_soc: number
+      max_discharge: number
+      efficiency: number
+      capex: number
+    }
+    diesel: { capex: number; opex: number }
+    pv: { capex: number }
+  }
+}
 
-// Constants
-const SIMULATION_YEARS = 5
+export type OptimizationResult = {
+  capacity: {
+    PV: number
+    battery: number
+    diesel: number
+  }
+  E_PV: number[]
+  E_batt: number[]
+  E_diesel: number[]
+  C_batt: number[]
+  E_load: number[]
+  cost: number
+}
 
-// Battery Constants
-const RTE_BATT = 0.95 // Round trip efficiency of the battery
-const CHARGE_EFFICIENCY = Math.sqrt(RTE_BATT) // Used for both charge and discharge
-const MAX_DISCHARGE = 0.9 // Maximum discharge of the battery
-const BATTERY_COST = 140
-const battery_initial_soc = 0.5 // Initial state of charge
-
-// PV Constants
-const PV_COST = 720
-
-// Diesel Constants
-const DIESEL_COST = 261
-const DIESEL_FUEL = 0.2
-
-// Function to calculate energy balance over the time period
 function energy_balance(
   pv_capacity: number,
   battery_capacity: number,
   diesel_capacity: number,
   E_load: number[],
-  E_PV: number[]
+  E_PV: number[],
+  options: OptimizationParams['options']
 ): { E_batt: number[]; E_diesel: number[]; C_batt: number[] } {
   const PV_output = E_PV.map(e => pv_capacity * e) // Actual energy produced by the PV system [Wh]
   const E_batt = new Array(E_load.length).fill(0)
   const C_batt = new Array(E_load.length).fill(0)
   const E_diesel = new Array(E_load.length).fill(0)
-  let soc = battery_initial_soc * battery_capacity // State of charge starts at initial SOC
-  const max_battery_discharge = (1 - MAX_DISCHARGE) * battery_capacity
+  let soc = options.battery.initial_soc * battery_capacity // State of charge starts at initial SOC
+  const max_battery_discharge = (1 - options.battery.max_discharge) * battery_capacity
 
   for (let t = 0; t < E_load.length; t++) {
     let surplus = PV_output[t] - E_load[t]
 
     if (surplus > 0) {
       // Charge battery with surplus
-      soc += CHARGE_EFFICIENCY * surplus
+      soc += options.battery.efficiency * surplus
       soc = Math.min(soc, battery_capacity) // Cap at battery capacity
     } else {
       // Discharge battery to meet deficit
       const available = soc - max_battery_discharge
-      const discharged = Math.min(available, -surplus / CHARGE_EFFICIENCY)
+      const discharged = Math.min(available, -surplus / options.battery.efficiency)
       if (discharged > 0) {
         soc -= discharged
       }
-      const final_discharge = discharged * CHARGE_EFFICIENCY
+      const final_discharge = discharged * options.battery.efficiency
       E_batt[t] = Math.max(final_discharge, 0)
       surplus += final_discharge
     }
@@ -61,31 +72,48 @@ function energy_balance(
 }
 
 // Objective function to minimize
-function cost_func(x: number[], E_load: number[], E_PV: number[]): number {
+function cost_func(
+  x: number[],
+  E_load: number[],
+  E_PV: number[],
+  options: OptimizationParams['options']
+): number {
   const pv_capacity = x[0]
   const battery_capacity = x[1]
   const diesel_capacity = x[2]
 
-  const pv_capacity_cost = pv_capacity * PV_COST
-  const battery_capacity_cost = battery_capacity * BATTERY_COST
-  const diesel_capacity_cost = diesel_capacity * DIESEL_COST
+  const pv_capacity_cost = pv_capacity * options.pv.capex
+  const battery_capacity_cost = battery_capacity * options.battery.capex
+  const diesel_capacity_cost = diesel_capacity * options.diesel.capex
 
   // Levelized cost of energy (LCOE)
-  const { E_diesel } = energy_balance(pv_capacity, battery_capacity, diesel_capacity, E_load, E_PV)
+  const { E_diesel } = energy_balance(
+    pv_capacity,
+    battery_capacity,
+    diesel_capacity,
+    E_load,
+    E_PV,
+    options
+  )
 
   // Scaling the demand with a load factor to see the long-term benefit
-  const adjusted_demand = SIMULATION_YEARS * 8760
+  const adjusted_demand = options.years * 8760
   const load_factor = 1 / (E_load.length / adjusted_demand)
   const total_cost =
     pv_capacity_cost +
     battery_capacity_cost +
     diesel_capacity_cost +
-    E_diesel.reduce((sum, e) => sum + e, 0) * load_factor * DIESEL_FUEL
+    E_diesel.reduce((sum, e) => sum + e, 0) * load_factor * options.diesel.opex
   return total_cost / (E_load.reduce((sum, e) => sum + e, 0) * load_factor)
 }
 
 // Checks if the demand is met
-function demand_constraint(x: number[], E_load: number[], E_PV: number[]): number {
+function demand_constraint(
+  x: number[],
+  E_load: number[],
+  E_PV: number[],
+  options: OptimizationParams['options']
+): number {
   const pv_capacity = x[0]
   const battery_capacity = x[1]
   const diesel_capacity = x[2]
@@ -94,7 +122,8 @@ function demand_constraint(x: number[], E_load: number[], E_PV: number[]): numbe
     battery_capacity,
     diesel_capacity,
     E_load,
-    E_PV
+    E_PV,
+    options
   )
   const residuals = E_load.map(
     (e_load_t, t) => E_batt[t] + E_diesel[t] + pv_capacity * E_PV[t] - e_load_t
@@ -103,13 +132,18 @@ function demand_constraint(x: number[], E_load: number[], E_PV: number[]): numbe
 }
 
 // Objective function that penalizes if constraints are violated
-function constrained_cost(x: number[], E_load: number[], E_PV: number[]): number {
-  const constraint_violation = demand_constraint(x, E_load, E_PV)
+function constrained_cost(
+  x: number[],
+  E_load: number[],
+  E_PV: number[],
+  options: OptimizationParams['options']
+): number {
+  const constraint_violation = demand_constraint(x, E_load, E_PV, options)
   if (constraint_violation < -0.0001) {
     // Apply a large penalty if the constraint is violated
     return Infinity
   }
-  return cost_func(x, E_load, E_PV)
+  return cost_func(x, E_load, E_PV, options)
 }
 
 // Helper function to select k unique random elements from an array
@@ -131,7 +165,7 @@ function differential_evolution(
   recombination = 0.7,
   pop_size = 20,
   max_iter = 1000,
-  tol = 1e-6,
+  tol = 1e-16,
   ...args: any[]
 ): { best_solution: number[]; best_score: number } {
   const num_params = bounds.length
@@ -203,7 +237,11 @@ function differential_evolution(
 }
 
 // Function to optimize battery and solar capacity
-export function optimize_capacity({ E_load, E_PV }: OptimizationParams): OptimizationResult {
+export function optimize_capacity({
+  E_load,
+  E_PV,
+  options
+}: OptimizationParams): OptimizationResult {
   const bounds: [number, number][] = [
     [0, 1000],
     [0, 5000],
@@ -216,11 +254,12 @@ export function optimize_capacity({ E_load, E_PV }: OptimizationParams): Optimiz
     bounds,
     0.5,
     0.7,
-    15,
+    500,
     5000,
-    1e-7,
+    1e-8,
     E_load,
-    E_PV
+    E_PV,
+    options
   )
   const optimal_pv_capacity = result.best_solution[0]
   const optimal_battery_capacity = result.best_solution[1]
@@ -230,8 +269,11 @@ export function optimize_capacity({ E_load, E_PV }: OptimizationParams): Optimiz
     optimal_battery_capacity,
     optimal_diesel_capacity,
     E_load,
-    E_PV
+    E_PV,
+    options
   )
+
+  const cost = cost_func(result.best_solution, E_load, E_PV, options)
 
   return {
     capacity: {
@@ -243,6 +285,37 @@ export function optimize_capacity({ E_load, E_PV }: OptimizationParams): Optimiz
     E_batt: E_batt,
     E_diesel: E_diesel,
     C_batt: C_batt,
-    E_load: E_load
+    E_load: E_load,
+    cost
+  }
+}
+
+// optimizeWorker.js
+self.onmessage = function (e) {
+  try {
+    const { data, settings } = e.data
+
+    const result = optimize_capacity({
+      ...data,
+      options: {
+        years: settings.years,
+        battery: {
+          initial_soc: 0.5,
+          max_discharge: 0.9,
+          efficiency: Math.sqrt(0.95),
+          capex: settings.batteryInstallCost
+        },
+        diesel: {
+          capex: settings.dieselInstallCost,
+          opex: settings.dieselFuelCost
+        },
+        pv: { capex: settings.pvInstallCost }
+      }
+    })
+
+    // Send result back to the main thread
+    postMessage(result)
+  } catch (error) {
+    console.error('Error in Worker:', error)
   }
 }
