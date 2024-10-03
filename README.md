@@ -47,7 +47,13 @@ pnpm install
 
 ***Note:** You will need to set an environment variable: `RENEWABLES_NINJA_API_TOKEN`. Create an account on [www.renewables.ninja](https://www.renewables.ninja/) to get your key.
 
-Then, run the development server:
+Then, build the optimization worker:
+
+```bash
+npm run build:workers
+```
+
+Finally, run the development server:
 
 ```bash
 npm run dev
