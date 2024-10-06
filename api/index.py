@@ -10,6 +10,7 @@ load_dotenv()
 from model.demand.index import build_settlement_demand
 from model.services.renewable_ninja import get_pv_output
 from model.services.utilities import comparable_date
+from model.hydro.index import get_hydro
 
 app = FastAPI()
 
@@ -22,6 +23,7 @@ def run(
     num_days: int,
     start_date: str = datetime.datetime.now().strftime("%Y-%m-%d"),
 ):
+    unit_hydro = get_hydro(lon, lat, start_date, num_days)
     demand = build_settlement_demand(
         num_households=households,
         date_start=start_date,
@@ -39,4 +41,5 @@ def run(
     return {
         "E_load": list(demand),
         "E_PV": list(unit_pv),
+        "E_Hydro": list(unit_hydro),
     }

@@ -33,6 +33,7 @@ function generateHourlyTimestampsUTC(startDate: string, n: number): string[] {
 
 export default function LoadDispatch({
   E_PV,
+  E_Hydro,
   E_diesel,
   E_load,
   E_batt,
@@ -71,6 +72,15 @@ export default function LoadDispatch({
         mode: 'lines+markers',
         line: { color: MICROGRID_CONFIG.colors.pv },
         marker: { color: MICROGRID_CONFIG.colors.pv }
+      },
+      {
+        name: 'Hydroelectric',
+        y: E_Hydro,
+        x: timestamps,
+        type: 'scatter', // Line chart type in Plotly is 'scatter'
+        mode: 'lines+markers',
+        line: { color: MICROGRID_CONFIG.colors.hydro },
+        marker: { color: MICROGRID_CONFIG.colors.hydro }
       },
       {
         name: 'Battery Charge',

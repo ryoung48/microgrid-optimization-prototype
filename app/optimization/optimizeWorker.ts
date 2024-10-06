@@ -1,6 +1,7 @@
 export type OptimizationParams = {
   E_load: number[]
   E_PV: number[]
+  E_Hydro: number[]
   options: {
     years: number
     battery: {
@@ -11,6 +12,7 @@ export type OptimizationParams = {
     }
     diesel: { capex: number; opex: number }
     pv: { capex: number }
+    hydro: { capex: number; max: number }
   }
 }
 
@@ -19,8 +21,10 @@ export type OptimizationResult = {
     PV: number
     battery: number
     diesel: number
+    hydro: number
   }
   E_PV: number[]
+  E_Hydro: number[]
   E_batt: number[]
   E_diesel: number[]
   C_batt: number[]
@@ -30,13 +34,16 @@ export type OptimizationResult = {
 
 function energy_balance(
   pv_capacity: number,
+  hydro_capacity: number,
   battery_capacity: number,
   diesel_capacity: number,
   E_load: number[],
   E_PV: number[],
+  E_Hydro: number[],
   options: OptimizationParams['options']
 ): { E_batt: number[]; E_diesel: number[]; C_batt: number[] } {
   const PV_output = E_PV.map(e => pv_capacity * e) // Actual energy produced by the PV system [Wh]
+  const hydro_output = E_Hydro.map(e => hydro_capacity * e) // Actual energy produced by the hydroelectric system [Wh]
   const E_batt = new Array(E_load.length).fill(0)
   const C_batt = new Array(E_load.length).fill(0)
   const E_diesel = new Array(E_load.length).fill(0)
@@ -44,7 +51,7 @@ function energy_balance(
   const max_battery_discharge = (1 - options.battery.max_discharge) * battery_capacity
 
   for (let t = 0; t < E_load.length; t++) {
-    let surplus = PV_output[t] - E_load[t]
+    let surplus = PV_output[t] + hydro_output[t] - E_load[t]
 
     if (surplus > 0) {
       // Charge battery with surplus
@@ -76,23 +83,28 @@ function cost_func(
   x: number[],
   E_load: number[],
   E_PV: number[],
+  E_Hydro: number[],
   options: OptimizationParams['options']
 ): number {
   const pv_capacity = x[0]
   const battery_capacity = x[1]
   const diesel_capacity = x[2]
+  const hydro_capacity = x[3]
 
   const pv_capacity_cost = pv_capacity * options.pv.capex
   const battery_capacity_cost = battery_capacity * options.battery.capex
   const diesel_capacity_cost = diesel_capacity * options.diesel.capex
+  const hydro_capacity_cost = hydro_capacity * options.hydro.capex
 
   // Levelized cost of energy (LCOE)
   const { E_diesel } = energy_balance(
     pv_capacity,
+    hydro_capacity,
     battery_capacity,
     diesel_capacity,
     E_load,
     E_PV,
+    E_Hydro,
     options
   )
 
@@ -103,6 +115,7 @@ function cost_func(
     pv_capacity_cost +
     battery_capacity_cost +
     diesel_capacity_cost +
+    hydro_capacity_cost +
     E_diesel.reduce((sum, e) => sum + e, 0) * load_factor * options.diesel.opex
   return total_cost / (E_load.reduce((sum, e) => sum + e, 0) * load_factor)
 }
@@ -112,21 +125,26 @@ function demand_constraint(
   x: number[],
   E_load: number[],
   E_PV: number[],
+  E_Hydro: number[],
   options: OptimizationParams['options']
 ): number {
   const pv_capacity = x[0]
   const battery_capacity = x[1]
   const diesel_capacity = x[2]
+  const hydro_capacity = x[3]
   const { E_batt, E_diesel } = energy_balance(
     pv_capacity,
+    hydro_capacity,
     battery_capacity,
     diesel_capacity,
     E_load,
     E_PV,
+    E_Hydro,
     options
   )
   const residuals = E_load.map(
-    (e_load_t, t) => E_batt[t] + E_diesel[t] + pv_capacity * E_PV[t] - e_load_t
+    (e_load_t, t) =>
+      E_batt[t] + E_diesel[t] + pv_capacity * E_PV[t] + hydro_capacity * E_Hydro[t] - e_load_t
   )
   return Math.min(...residuals)
 }
@@ -136,14 +154,15 @@ function constrained_cost(
   x: number[],
   E_load: number[],
   E_PV: number[],
+  E_Hydro: number[],
   options: OptimizationParams['options']
 ): number {
-  const constraint_violation = demand_constraint(x, E_load, E_PV, options)
+  const constraint_violation = demand_constraint(x, E_load, E_PV, E_Hydro, options)
   if (constraint_violation < -0.0001) {
     // Apply a large penalty if the constraint is violated
     return Infinity
   }
-  return cost_func(x, E_load, E_PV, options)
+  return cost_func(x, E_load, E_PV, E_Hydro, options)
 }
 
 // Helper function to select k unique random elements from an array
@@ -240,12 +259,14 @@ function differential_evolution(
 export function optimize_capacity({
   E_load,
   E_PV,
+  E_Hydro,
   options
 }: OptimizationParams): OptimizationResult {
   const bounds: [number, number][] = [
     [0, 1000],
     [0, 5000],
-    [0, 1000]
+    [0, 1000],
+    [0, options.hydro.max]
   ] // Lower and upper bounds
 
   // Attempt optimization with different methods or tweaks
@@ -259,29 +280,35 @@ export function optimize_capacity({
     1e-8,
     E_load,
     E_PV,
+    E_Hydro,
     options
   )
   const optimal_pv_capacity = result.best_solution[0]
   const optimal_battery_capacity = result.best_solution[1]
   const optimal_diesel_capacity = result.best_solution[2]
+  const optimal_hydro_capacity = result.best_solution[3]
   const { E_batt, E_diesel, C_batt } = energy_balance(
     optimal_pv_capacity,
+    optimal_hydro_capacity,
     optimal_battery_capacity,
     optimal_diesel_capacity,
     E_load,
     E_PV,
+    E_Hydro,
     options
   )
 
-  const cost = cost_func(result.best_solution, E_load, E_PV, options)
+  const cost = cost_func(result.best_solution, E_load, E_PV, E_Hydro, options)
 
   return {
     capacity: {
       PV: optimal_pv_capacity,
       battery: optimal_battery_capacity,
-      diesel: optimal_diesel_capacity
+      diesel: optimal_diesel_capacity,
+      hydro: optimal_hydro_capacity
     },
     E_PV: E_PV.map(e => optimal_pv_capacity * e),
+    E_Hydro: E_Hydro.map(e => optimal_hydro_capacity * e),
     E_batt: E_batt,
     E_diesel: E_diesel,
     C_batt: C_batt,
@@ -309,7 +336,8 @@ self.onmessage = function (e) {
           capex: settings.dieselInstallCost,
           opex: settings.dieselFuelCost
         },
-        pv: { capex: settings.pvInstallCost }
+        pv: { capex: settings.pvInstallCost },
+        hydro: { capex: settings.hydroInstallCost, max: settings.hydroMax }
       }
     })
 

@@ -16,15 +16,18 @@ export default function Page({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({
     E_PV: [0],
-    E_load: [0]
+    E_load: [0],
+    E_Hydro: [0]
   })
   const [optimization, setOptimization] = useState<OptimizationResult>({
     capacity: {
       PV: 1,
       battery: 1,
-      diesel: 1
+      diesel: 1,
+      hydro: 0
     },
     E_PV: [0],
+    E_Hydro: [0],
     E_batt: [0],
     E_diesel: [0],
     C_batt: [0],
@@ -37,12 +40,17 @@ export default function Page({ params }: { params: { id: string } }) {
   const dieselInstallCostRef = useRef<HTMLInputElement>(null)
   const dieselFuelCostRef = useRef<HTMLInputElement>(null)
   const pvInstallCostRef = useRef<HTMLInputElement>(null)
+  const hydroInstallCostRef = useRef<HTMLInputElement>(null)
+  const hydroMaxRef = useRef<HTMLInputElement>(null)
+  const hydroDist = village?.['HydropowerDist'] ?? 1000
   const [settings, applySettings] = useState({
     years: 5,
     batteryInstallCost: 140,
     dieselInstallCost: 261,
     dieselFuelCost: 0.2,
-    pvInstallCost: 720
+    pvInstallCost: 720,
+    hydroInstallCost: hydroDist > 2 ? 300000 : 3000,
+    hydroMax: village?.['Hydropower'] ?? 0
   })
   if (!village) return <div>No data found</div>
   const { numDays, startDate } = MICROGRID_CONFIG
@@ -130,7 +138,9 @@ export default function Page({ params }: { params: { id: string } }) {
                 batteryInstallCost: parseMonetaryValue(batteryInstallCostRef.current?.value),
                 dieselInstallCost: parseMonetaryValue(dieselInstallCostRef.current?.value),
                 dieselFuelCost: parseMonetaryValue(dieselFuelCostRef.current?.value),
-                pvInstallCost: parseMonetaryValue(pvInstallCostRef.current?.value)
+                pvInstallCost: parseMonetaryValue(pvInstallCostRef.current?.value),
+                hydroInstallCost: parseMonetaryValue(hydroInstallCostRef.current?.value),
+                hydroMax: hydroMaxRef.current?.valueAsNumber ?? 0
               }
 
               applySettings(formData)
@@ -192,6 +202,25 @@ export default function Page({ params }: { params: { id: string } }) {
                 ref={batteryInstallCostRef}
                 defaultValue={settings.batteryInstallCost}
                 monetary
+                required
+              />
+            </div>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <TextInput
+                id='hydroInstallCost'
+                label='Hydro Installation Cost'
+                type='number'
+                ref={hydroInstallCostRef}
+                defaultValue={settings.hydroInstallCost}
+                monetary
+                required
+              />
+              <TextInput
+                id='maxHydroPotential'
+                label='Max Hydro Potential'
+                type='number'
+                ref={hydroMaxRef}
+                defaultValue={settings.hydroMax}
                 required
               />
             </div>

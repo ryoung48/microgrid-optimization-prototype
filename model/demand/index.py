@@ -98,13 +98,10 @@ def build_settlement_demand(
     cooling = get_heating_demand(start_comparable_date, end_comparable_date, lat, lon)
     
     for date in dates:
-        households = [
-            User(
-                user_name=f"household #{i}",
-                num_users=1,
-            )
-            for i in range(num_households)
-        ]
+        households = [User(
+                user_name=f"household",
+                num_users=num_households,
+            )]
         comparable = comparable_date(date)
         cooling_demand = cooling[comparable]["cooling_demand"]
         
