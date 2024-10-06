@@ -75,6 +75,7 @@ appliance_occurrences = {
     "water pump": 0.790,
 }
 
+
 def build_settlement_demand(
     num_households: int, date_start: str, num_days: int, lat: int, lon: int
 ):
@@ -96,15 +97,18 @@ def build_settlement_demand(
     start_comparable_date = comparable_date(date_start)
     end_comparable_date = comparable_date(dates[-1])
     cooling = get_heating_demand(start_comparable_date, end_comparable_date, lat, lon)
-    
+
     for date in dates:
-        households = [User(
-                user_name=f"household",
-                num_users=num_households,
-            )]
+        households = [
+            User(
+                user_name=f"household #{i}",
+                num_users=1,
+            )
+            for i in range(num_households)
+        ]
         comparable = comparable_date(date)
         cooling_demand = cooling[comparable]["cooling_demand"]
-        
+
         for i, household in enumerate(households):
             for appliance in appliances[i]:
                 seasonal = appliance_seasonality.get(appliance, False)
@@ -115,7 +119,7 @@ def build_settlement_demand(
                         definition = dict(definition)
                         definition["power"] *= min(cooling_demand, 1)
                     household.add_appliance(name=appliance, **definition)
-        
+
         settlement = UseCase(users=households, date_start=date)
         settlement.initialize(num_days=1)
         demand = settlement.generate_daily_load_profiles()

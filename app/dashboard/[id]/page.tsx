@@ -43,13 +43,14 @@ export default function Page({ params }: { params: { id: string } }) {
   const hydroInstallCostRef = useRef<HTMLInputElement>(null)
   const hydroMaxRef = useRef<HTMLInputElement>(null)
   const hydroDist = village?.['HydropowerDist'] ?? 1000
+  const hydroDisabled = hydroDist > 2
   const [settings, applySettings] = useState({
     years: 5,
     batteryInstallCost: 140,
     dieselInstallCost: 261,
     dieselFuelCost: 0.2,
     pvInstallCost: 720,
-    hydroInstallCost: hydroDist > 2 ? 300000 : 3000,
+    hydroInstallCost: hydroDisabled ? 300000 : 3000,
     hydroMax: village?.['Hydropower'] ?? 0
   })
   if (!village) return <div>No data found</div>
